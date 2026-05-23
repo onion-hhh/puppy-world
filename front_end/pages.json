@@ -1,12 +1,19 @@
 {
 	"pages": [
 		{
+			"path": "pages/chat/chat",
+			"style": {
+			        "navigationBarTitleText": "汪汪世界智能助手"
+			      }
+		},
+		{
 			"path": "pages/index/index",
 			"style": {
 				"navigationBarTitleText": "登录"
 			}
 			 
 		},
+		
 		{
 			"path": "pages/my/setting/setting",
 			"style": {

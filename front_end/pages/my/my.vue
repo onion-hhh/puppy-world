@@ -38,6 +38,13 @@
         <view class="menu-title">设置</view>
         <view class="arrow">></view>
       </view>
+
+      <!-- 智能助手 -->
+      <view class="menu-item" @tap="goChat">
+        <view class="menu-icon">🤖</view>
+        <view class="menu-title">智能助手</view>
+        <view class="arrow">></view>
+      </view>
     </view>
 
     <!-- 退出登录 -->
@@ -80,6 +87,11 @@ export default {
     goSetting() {
       uni.navigateTo({
         url: "/pages/my/setting/setting"
+      });
+    },
+    goChat() {
+      uni.navigateTo({
+        url: "/pages/chat/chat"
       });
     },
     logout() {

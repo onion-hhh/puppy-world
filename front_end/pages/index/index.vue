@@ -2,7 +2,6 @@
 	<view class="login-container">
 		<view class="title">汪汪世界</view>
 		<view class="subtitle">发现身边的宠物友好地点</view>
-		<!-- 必须用 button，不能用 view！微信强制要求 -->
 		<img src="@/static/小狗.png" alt="" />
 		<button class="login-btn" @tap="wxLogin">
 			微信一键登录

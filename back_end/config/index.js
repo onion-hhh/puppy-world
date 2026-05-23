@@ -22,6 +22,12 @@ module.exports = {
     appsecret: process.env.WECHAT_APPSECRET
   },
 
+  coze: {
+    botId: process.env.COZE_BOT_ID,
+    apiToken: process.env.COZE_API_TOKEN,
+    apiUrl: process.env.COZE_API_URL || 'https://api.coze.cn/v3/chat'
+  },
+
   upload: {
     path: process.env.UPLOAD_PATH,
     maxSize: process.env.MAX_FILE_SIZE
