@@ -31,7 +31,7 @@
         </view>
         <view class="right">
           <view class="score">{{item.avgScore}}</view>
-          <view class="tag">{{item.tags}}</view>
+          <view class="tag">{{item.tags || '暂无标签'}}</view>
         </view>
       </view>
     </view>
@@ -52,6 +52,16 @@ export default {
   onLoad() {
   	this.getList()
   },
+  onShow() {
+    // 页面显示时重新加载列表，确保删除后及时更新
+    this.getList()
+  },
+  onUnload() {
+      if (this.timer) {
+        clearTimeout(this.timer)
+        this.timer = null
+      }
+    },
   computed: {
       // 实时搜索，但走防抖控制
       showList() {

@@ -1,4 +1,3 @@
-// models/Place.js
 const db = require('../utils/db');
 
 class Place {
@@ -52,8 +51,7 @@ class Place {
   }
 
   // 获取地点列表
-  static async getPlaceList({ type, page, limit }) {
-    const offset = (page - 1) * limit;
+  static async getPlaceList({ type }) {
     let query = 'SELECT id,name,address,avg_score,tags FROM place WHERE status = 1';
     const params = [];
 
@@ -62,16 +60,14 @@ class Place {
       params.push(type);
     }
 
-    query += ' ORDER BY create_time DESC LIMIT ? OFFSET ?';
-    params.push(limit, offset);
+    query += ' ORDER BY create_time DESC';
 
     const [rows] = await db.query(query, params);
     return rows.map(row => new Place(row));
   }
 
   // 获取管理员列表
-  static async getAdminList({ page, limit, status }) {
-    const offset = (page - 1) * limit;
+  static async getAdminList({ status }) {
     let query = 'SELECT * FROM place';
     const params = [];
 
@@ -80,8 +76,7 @@ class Place {
       params.push(status);
     }
 
-    query += ' ORDER BY create_time DESC LIMIT ? OFFSET ?';
-    params.push(limit, offset);
+    query += ' ORDER BY create_time DESC';
 
     const [rows] = await db.query(query, params);
     return rows.map(row => new Place(row));
@@ -93,13 +88,38 @@ class Place {
     return rows[0].count;
   }
 
-  // 删除地点
+  // 删除地点（级联删除相关的收藏和评论）
   static async delete(id) {
-    const [result] = await db.query(
-      'UPDATE place SET status = 0 WHERE id = ?',
-      [id]
-    );
-    return result.affectedRows > 0;
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      // 1. 删除该地点的所有收藏
+      await connection.query(
+        'DELETE FROM collect WHERE place_id = ?',
+        [id]
+      );
+
+      // 2. 删除该地点的所有评论
+      await connection.query(
+        'DELETE FROM comment WHERE place_id = ?',
+        [id]
+      );
+
+      // 3. 删除地点本身
+      const [result] = await connection.query(
+        'DELETE FROM place WHERE id = ?',
+        [id]
+      );
+
+      await connection.commit();
+      return result.affectedRows > 0;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   }
 
   // 获取附近地点
@@ -108,13 +128,12 @@ class Place {
     let params = [lat, lng, lat];
 
     if (!showAll) {
-      // 只返回半径内的地点
       whereSql = 'HAVING distance <= ?';
       params.push(radius);
     }
 
     const sql = `
-      SELECT 
+      SELECT
         id, name, address, latitude, longitude, avg_score, tags,
         (6371000 * acos(
           cos(radians(?)) * cos(radians(latitude)) *
@@ -130,6 +149,22 @@ class Place {
 
     const [rows] = await db.query(sql, params);
     return rows.map(row => new Place(row));
+  }
+
+  // 查找指定距离内的地点（用于重复检测）
+  static async findNearby(latitude, longitude, distance) {
+    const [rows] = await db.query(`
+      SELECT id, type, name, address
+      FROM place 
+      WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+      AND (6371000 * ACOS(
+        COS(RADIANS(?)) * COS(RADIANS(latitude)) *
+        COS(RADIANS(longitude) - RADIANS(?)) +
+        SIN(RADIANS(?)) * SIN(RADIANS(latitude))
+      )) < ?
+    `, [latitude, longitude, latitude, distance]);
+    
+    return rows;
   }
 }
 

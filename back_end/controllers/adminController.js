@@ -1,8 +1,8 @@
-// controllers/adminController.js
 const Admin = require('../models/Admin');
 const Place = require('../models/Place');
 const User = require('../models/User');
 const Apply = require('../models/Apply');
+const Comment = require('../models/Comment');
 const jwt = require('../utils/jwt');
 const bcrypt = require('../utils/bcrypt');
 const result = require('../utils/result');
@@ -24,37 +24,40 @@ class AdminController {
         return res.json(result.error('用户名或密码错误'));
       }
       const token = jwt.generateToken(admin.id, 'admin');
-      res.json(result.success({ token, admin }));
+      res.json(result.success({ token, admin: { id: admin.id, username: admin.username } }));
     } catch (error) {
       res.json(result.error('登录失败'));
     }
   }
 
-  // 获取仪表盘数据
-  static async getDashboard(req, res) {
+  // 获取统计数据
+  static async getStatistics(req, res) {
     try {
-      const [placeCount, userCount, applyCount, pendingCount] = await Promise.all([
+      const [placeCount, userCount, applyCount, pendingCount, commentCount] = await Promise.all([
         Place.getCount(),
         User.getCount(),
         Apply.getCount(),
-        Apply.getPendingCount()
+        Apply.getPendingCount(),
+        Comment.getCount()
       ]);
+      
       res.json(result.success({
         placeCount,
         userCount,
         applyCount,
-        pendingCount
+        pendingCount,
+        commentCount
       }));
     } catch (error) {
-      res.json(result.error('获取仪表盘数据失败'));
+      console.error('getStatistics error:', error);
+      res.json(result.error('获取统计数据失败'));
     }
   }
 
   // 获取用户列表
   static async getUserList(req, res) {
     try {
-      const { page = 1, limit = 10 } = req.query;
-      const users = await User.getUserList({ page, limit });
+      const users = await User.getUserList();
       res.json(result.success(users));
     } catch (error) {
       res.json(result.error('获取用户列表失败'));
@@ -64,8 +67,7 @@ class AdminController {
   // 获取地点管理列表
   static async getPlaceList(req, res) {
     try {
-      const { page = 1, limit = 10, status } = req.query;
-      const places = await Place.getAdminList({ page, limit, status });
+      const places = await Place.getAdminList({});
       res.json(result.success(places));
     } catch (error) {
       res.json(result.error('获取地点列表失败'));
@@ -79,10 +81,34 @@ class AdminController {
       if (!placeId) {
         return res.json(result.error('缺少地点ID', 400));
       }
-      const result = await Place.delete(placeId);
-      res.json(result.success(result));
+      const success = await Place.delete(placeId);
+      res.json(result.success(success));
     } catch (error) {
       res.json(result.error('删除地点失败'));
+    }
+  }
+
+  // 获取评论列表
+  static async getCommentList(req, res) {
+    try {
+      const comments = await Comment.getAdminList();
+      res.json(result.success(comments));
+    } catch (error) {
+      res.json(result.error('获取评论列表失败'));
+    }
+  }
+
+  // 删除评论
+  static async deleteComment(req, res) {
+    try {
+      const { commentId } = req.body;
+      if (!commentId) {
+        return res.json(result.error('缺少评论ID', 400));
+      }
+      const success = await Comment.delete(commentId);
+      res.json(result.success(success));
+    } catch (error) {
+      res.json(result.error('删除评论失败'));
     }
   }
 }

@@ -1,4 +1,3 @@
-// models/User.js
 const db = require('../utils/db');
 
 class User {
@@ -50,11 +49,9 @@ class User {
   }
 
   // 获取用户列表
-  static async getUserList({ page, limit }) {
-    const offset = (page - 1) * limit;
+  static async getUserList() {
     const [rows] = await db.query(
-      'SELECT * FROM user ORDER BY create_time DESC LIMIT ? OFFSET ?',
-      [limit, offset]
+      'SELECT * FROM user ORDER BY create_time DESC'
     );
     return rows.map(row => new User(row));
   }

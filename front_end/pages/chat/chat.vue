@@ -32,8 +32,9 @@
         v-model="inputText" 
         placeholder="请输入问题" 
         @confirm="send" 
+        :disabled="isLoading"
       />
-      <button @tap="send">
+      <button @tap="send" :disabled="isLoading">
         发送
       </button>
     </view>
@@ -51,7 +52,8 @@ export default {
       isLoading: false,
       currentBotMsgId: null,
       streamBuffer: "",
-      hasReceivedContent: false
+      requestTask: null,
+      typingInterval: null
     };
   },
   onLoad() {
@@ -61,26 +63,47 @@ export default {
       content: "你好！我是汪汪世界智能助手，有什么可以帮你的？"
     });
   },
+  onUnload() {
+    // 1. 终止流式网络请求
+    if (this.requestTask && typeof this.requestTask.abort === 'function') {
+      this.requestTask.abort();
+    }
+    this.requestTask = null;
+  
+    // 2. 强制清除打字动画定时器（双重兜底）
+    if (this.typingInterval) {
+      clearInterval(this.typingInterval);
+      this.typingInterval = null;
+    }
+    // 额外兜底：全局延时定时器预留销毁位
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+  
+    // 3. 清空状态，阻断后续异步分片回调读写页面数据
+    this.isLoading = false;
+    this.currentBotMsgId = null;
+    this.streamBuffer = "";
+    this.messages = [];
+  },
   methods: {
     goBack() {
       uni.navigateBack();
     },
-    // 发送消息（真正的流式响应）
+    // 发送消息（流式响应）
     send() {
       if (!this.inputText.trim() || this.isLoading) return;
       const text = this.inputText;
       this.inputText = "";
-
       // 加入用户消息
       this.messages.push({
         id: ++this.msgId,
         type: "user",
         content: text
       });
-
       this.isLoading = true;
       this.streamBuffer = "";
-      this.hasReceivedContent = false;  // 标记是否收到过增量内容
 
       // 创建机器人消息占位（显示 thinking... 效果）
       this.currentBotMsgId = ++this.msgId;
@@ -90,11 +113,10 @@ export default {
         content: "",
         isThinking: true
       });
-
       const token = uni.getStorageSync('token');
-
-      // 使用 wx.request 实现真正的流式响应
-      const requestTask = wx.request({
+	  
+      // 使用 wx.request 实现流式响应
+      this.requestTask = wx.request({
         url: "http://localhost:3000/api/chat/stream",
         header: {
           "Content-Type": "application/json",
@@ -105,59 +127,42 @@ export default {
         }),
         method: "POST",
         enableChunked: true,
-        responseType: "arraybuffer",
+        responseType: "text",
         
-        // 使用标准的 success/fail 回调
         success: (res) => {
           console.log('请求成功:', res);
         },
         
         fail: (err) => {
           console.error('请求失败:', err);
-          this.isLoading = false;
-          const botMsg = this.messages.find(m => m.id === this.currentBotMsgId);
-          if (botMsg) {
-            botMsg.isThinking = false;
-            botMsg.content = "服务繁忙，请稍后再试。";
-          }
+          this.handleRequestError();
         },
         complete: () => {
           console.log('请求完成');
         }
       });
-
-      // 监听分块数据（流式响应核心）- 检查方法是否存在
-      if (typeof requestTask.onChunkReceived === 'function') {
-        requestTask.onChunkReceived((res) => {
+      // 尝试使用流式响应
+      if (typeof this.requestTask.onChunkReceived === 'function') {
+        // 支持流式响应
+        this.requestTask.onChunkReceived((res) => {
           this.handleChunkData(res);
         });
       } else {
-        // 如果不支持流式，使用模拟打字效果
-        console.warn('当前环境不支持 onChunkReceived');
+        // 不支持流式，使用轮询方式读取响应
+        console.warn('当前环境不支持 onChunkReceived，使用降级方案');
+        this.startResponsePolling(text);
       }
     },
-    // 分块数据处理（SSE格式解析）
+    // 处理分块数据
     handleChunkData(res) {
       try {
-        console.log('收到分块数据:', res);
-        // ArrayBuffer 转字符串
-        let rawStr = "";
-        try {
-          rawStr = new TextDecoder("utf-8").decode(res.data);
-        } catch (e) {
-          rawStr = Array.from(new Uint8Array(res.data))
-            .map((byte) => String.fromCharCode(byte))
-            .join("");
-          rawStr = unescape(encodeURIComponent(rawStr));
-        }
-
-        console.log('解析后的字符串:', rawStr);
-        // 追加到缓冲区
+        const rawStr = typeof res.data === 'string' ? res.data : 
+          (res.data instanceof ArrayBuffer ? new TextDecoder("utf-8").decode(res.data) : String(res.data));
+        
         this.streamBuffer += rawStr;
         
-        // 按 SSE 格式解析（按 \n\n 分割事件）
+        // 按 SSE 格式解析
         const events = this.streamBuffer.split("\n\n");
-        // 保留最后一个不完整的事件
         this.streamBuffer = events.pop() || "";
 
         for (const event of events) {
@@ -175,49 +180,65 @@ export default {
           if (dataStr) {
             try {
               const parsed = JSON.parse(dataStr);
-              console.log('解析的JSON:', parsed);
               
               if (parsed.type === 'delta' && parsed.content) {
-                // 增量内容，实时更新
-                this.hasReceivedContent = true;  // 标记已收到内容
                 const botMsg = this.messages.find(m => m.id === this.currentBotMsgId);
                 if (botMsg) {
                   botMsg.isThinking = false;
                   botMsg.content += parsed.content;
                 }
               } else if (parsed.type === 'end') {
-                // 结束信号 - 直接重置加载状态
-                console.log('流式响应结束');
                 this.isLoading = false;
-                this.hasReceivedContent = false;  // 重置标记，准备下次对话
               } else if (parsed.type === 'error') {
-                // 错误处理
                 const botMsg = this.messages.find(m => m.id === this.currentBotMsgId);
                 if (botMsg) {
                   botMsg.isThinking = false;
                   botMsg.content = parsed.message || "服务出错";
                 }
-              } else if (parsed.content) {
-                // 兼容其他格式
-                const botMsg = this.messages.find(m => m.id === this.currentBotMsgId);
-                if (botMsg) {
-                  botMsg.isThinking = false;
-                  botMsg.content += parsed.content;
-                }
+                this.isLoading = false;
               }
             } catch (e) {
               console.error('JSON解析错误:', e);
-              // 如果不是JSON，尝试直接显示
-              const botMsg = this.messages.find(m => m.id === this.currentBotMsgId);
-              if (botMsg) {
-                botMsg.isThinking = false;
-                botMsg.content += dataStr;
-              }
             }
           }
         }
       } catch (e) {
         console.error('数据处理异常:', e);
+      }
+    },
+    // 打字效果（降级方案用）
+    showTypingEffect(content) {
+      const botMsg = this.messages.find(m => m.id === this.currentBotMsgId);
+      if (!botMsg) return;
+
+      botMsg.isThinking = false;
+      botMsg.content = "";
+
+      let index = 0;
+      const speed = 50;
+
+      if (this.typingInterval) {
+        clearInterval(this.typingInterval);
+      }
+
+      this.typingInterval = setInterval(() => {
+        if (index < content.length) {
+          botMsg.content += content[index];
+          index++;
+        } else {
+          clearInterval(this.typingInterval);
+          this.typingInterval = null;
+          this.isLoading = false;
+        }
+      }, speed);
+    },
+    // 处理请求错误
+    handleRequestError(message) {
+      this.isLoading = false;
+      const botMsg = this.messages.find(m => m.id === this.currentBotMsgId);
+      if (botMsg) {
+        botMsg.isThinking = false;
+        botMsg.content = message || "服务繁忙，请稍后再试。";
       }
     }
   }

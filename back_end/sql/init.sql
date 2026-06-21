@@ -54,7 +54,6 @@ CREATE TABLE IF NOT EXISTS `apply` (
   `tags` VARCHAR(255) COMMENT '标签（逗号分隔）',
   `latitude` DECIMAL(10,6) COMMENT '纬度',
   `longitude` DECIMAL(10,6) COMMENT '经度',
-  `images` TEXT COMMENT '图片路径（逗号分隔）',
   `status` TINYINT NOT NULL DEFAULT 0 COMMENT '审核状态：0-待审核，1-审核通过，2-审核驳回',
   `reject_reason` TEXT COMMENT '驳回理由',
   `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '提交时间',
@@ -104,18 +103,6 @@ CREATE TABLE IF NOT EXISTS `admin` (
   UNIQUE KEY `uk_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='管理员表';
 
--- 7. 图片表（image）
-CREATE TABLE IF NOT EXISTS `image` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '图片ID',
-  `place_id` BIGINT UNSIGNED COMMENT '关联地点ID',
-  `apply_id` BIGINT UNSIGNED COMMENT '关联提交记录ID',
-  `url` VARCHAR(255) NOT NULL COMMENT '图片路径',
-  `type` TINYINT NOT NULL COMMENT '图片类型：1-地点图片，2-提交图片',
-  `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '上传时间',
-  PRIMARY KEY (`id`),
-  INDEX `idx_place_id` (`place_id`),
-  INDEX `idx_apply_id` (`apply_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='图片表';
 
 -- 8. 系统通知表（notification）
 CREATE TABLE IF NOT EXISTS `notification` (
@@ -131,9 +118,26 @@ CREATE TABLE IF NOT EXISTS `notification` (
   INDEX `idx_is_read` (`is_read`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='系统通知表';
 
--- 初始化管理员账号：admin / 密码：123456
+-- 地点智能审核记录表
+CREATE TABLE IF NOT EXISTS audit_log (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  apply_id BIGINT UNSIGNED NOT NULL,
+  audit_type ENUM('auto','manual') DEFAULT 'auto',
+  rule_score DECIMAL(5,2) DEFAULT 0,
+  ai_score DECIMAL(5,2) DEFAULT 0,
+  final_score DECIMAL(5,2) DEFAULT 0,
+  rule_result JSON,
+  ai_result JSON,
+  final_decision TINYINT,
+  reject_reason VARCHAR(500),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (apply_id) REFERENCES apply(id)
+);
+CREATE INDEX IF NOT EXISTS idx_audit_apply_id ON audit_log(apply_id);
+
+-- 初始化管理员账号：admin / 密码：admin123
 INSERT INTO `admin` (`username`, `password`, `nickname`, `role`) VALUES 
-('admin', '$2a$10$eX38SKM0Kz3e5D1Y2y4R1e8Q7f9gH2iJ3kL4mN5oP6qR7sT8uV9wX', '超级管理员', 2);
+('admin', '$10$I0oAk6hD5MCpo/A.2dQy8O4Twg1xRY1HMt7ThPxT5eo.jZiws7Su2', '超级管理员', 2);
 
 -- 初始化地点类型数据
 INSERT INTO `place` (`name`, `type`, `address`, `phone`, `business_hours`, `rules`, `tags`, `status`) VALUES

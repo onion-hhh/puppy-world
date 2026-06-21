@@ -27,13 +27,13 @@
         <!-- 营业时间 -->
         <view class="info-item">
           <text class="label">🕐 营业时间</text>
-          <text class="value">{{detail.businessHours}}</text>
+          <text class="value">{{detail.businessHours || '暂无'}}</text>
         </view>
 
         <!-- 联系电话 -->
         <view class="info-item">
           <text class="label">📞 联系电话</text>
-          <text class="value">{{detail.phone}}</text>
+          <text class="value">{{detail.phone || '暂无'}}</text>
         </view>
 
         <!-- 标签/设施 -->
@@ -47,7 +47,7 @@
         <!-- 规则说明 -->
         <view class="rules-wrap">
           <text class="label">⚠️ 注意事项</text>
-          <view class="rules-text">{{detail.rules}}</view>
+          <view class="rules-text">{{detail.rules || '暂无'}}</view>
         </view>
 
         <!-- 底部操作栏 -->
@@ -143,7 +143,10 @@ export default {
       try {
         const res = await get('/place/detail', { id: this.id })
         if (res.code === 200) {
-          this.detail = res.data
+          this.detail = {
+            ...res.data,
+            avgScore: Number(res.data.avgScore) || 0
+          }
           if (this.detail.tags) {
             this.tagList = this.detail.tags.split(',')
           }

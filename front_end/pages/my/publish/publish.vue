@@ -21,19 +21,26 @@
 
       <view class="publish-item" v-for="item in list" :key="item.id">
         <view class="item-content">
-          <image 
-            class="item-img" 
-            :src="fixImageUrl(item.images)" 
-            mode="aspectFill"
-          />
           <view class="item-info">
-            <view class="item-title">{{ item.name }}</view>
+            <view class="item-header">
+              <view class="item-title">{{ item.name }}</view>
+              <view 
+                class="status-tag" 
+                :class="'status-' + item.status"
+                @tap="showRejectReason(item)"
+              >
+                {{ getStatusText(item.status) }}
+              </view>
+            </view>
             <view class="item-address">{{ item.address }}</view>
-            <view class="item-tags">{{ item.tags }}</view>
+            <view class="item-tags" v-if="item.tags && item.tags !== 'null'">{{ item.tags }}</view>
             <view class="item-time">{{ formatTime(item.create_time) }}</view>
           </view>
         </view>
-		</view>
+        <view class="item-actions">
+          <view class="delete-btn" @tap="deleteApply(item.id)">删除</view>
+        </view>
+      </view>
       <view class="loading-tip" v-if="loading">加载中...</view>
       <view class="no-more-tip" v-if="noMore">没有更多了</view>
     </scroll-view>
@@ -42,12 +49,14 @@
 
 <script>
 import { mapState } from 'vuex'
-import { get } from '@/utils/request.js';
+import { get, post } from '@/utils/request.js';
 export default {
   data() {
     return {
       list: [],
-      loading: false
+      loading: false,
+      isRefreshing: false,
+      noMore: false
     };
   },
   onShow() {
@@ -61,6 +70,16 @@ export default {
       uni.navigateBack();
     },
 
+    onRefresh() {
+      this.isRefreshing = true;
+      this.noMore = false;
+      this.getList();
+    },
+
+    onLoadMore() {
+      if (this.loading || this.noMore) return;
+    },
+
     formatTime(timeStr) {
       if (!timeStr) return '';
       const date = new Date(timeStr);
@@ -68,6 +87,27 @@ export default {
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
+    },
+
+    getStatusText(status) {
+      const statusMap = {
+        0: '待审核',
+        1: '审核成功',
+        2: '审核失败'
+      };
+      return statusMap[status] || '未知';
+    },
+
+    // 显示审核失败原因
+    showRejectReason(item) {
+      if (item.status === 2) {
+        uni.showModal({
+          title: '审核失败原因',
+          content: item.rejectReason || item.reject_reason || '暂无原因',
+          showCancel: false,
+          confirmText: '知道了'
+        });
+      }
     },
 
     async getList() {
@@ -92,20 +132,29 @@ export default {
         this.loading = false;
       }
     },
-	// 修复2：处理图片URL，HTTP转HTTPS，空值用默认图兜底
-	    fixImageUrl(url) {
-	      if (!url) {
-	        return '/static/logo.png'; // 无图时用默认图
-	      }
-	      // 开发环境：HTTP 转 HTTPS（仅本地调试用）
-	      if (url.startsWith('http://')) {
-	        // 方案1：本地调试时，直接用默认图替代HTTP地址
-	        return '/static/logo.png';
-	        // 方案2：如果你的后端支持HTTPS，可改成：
-	        // return url.replace('http://', 'https://');
-	      }
-	      return url;
-	    }
+
+    // 删除申请
+    async deleteApply(id) {
+      uni.showModal({
+        title: '确认删除',
+        content: '确定要删除这条发布吗？',
+        success: async (res) => {
+          if (res.confirm) {
+            try {
+              const result = await post('/apply/delete', { applyId: id });
+              if (result.code === 200) {
+                uni.showToast({ title: '删除成功', icon: 'success' });
+                this.getList();
+              } else {
+                uni.showToast({ title: result.message || '删除失败', icon: 'none' });
+              }
+            } catch (error) {
+              uni.showToast({ title: '删除失败', icon: 'none' });
+            }
+          }
+        }
+      });
+    }
   }
 };
 </script>
@@ -114,6 +163,7 @@ export default {
 .publish-page {
   background-color: #f5f7fa;
   min-height: 100vh;
+  padding-top: 90rpx;
 }
 .navbar {
   display: flex;
@@ -121,7 +171,11 @@ export default {
   justify-content: center;
   height: 90rpx;
   background: linear-gradient(135deg, #409eff 0%, #ffc107 100%);
-  position: relative;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
 }
 .back-btn {
   position: absolute;
@@ -137,6 +191,7 @@ export default {
 .list-container {
   padding: 20rpx 30rpx;
   height: calc(100vh - 90rpx);
+  box-sizing: border-box;
 }
 .empty-tip {
   text-align: center;
@@ -146,33 +201,46 @@ export default {
 }
 .publish-item {
   background: #fff;
-  width: 84%;
+  width: 90%;
   border-radius: 16rpx;
   padding: 30rpx;
   margin-bottom: 20rpx;
   box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.06);
 }
 .item-content {
-  display: flex;
-  gap: 20rpx;
   margin-bottom: 20rpx;
 }
-.item-img {
-  width: 160rpx;
-  height: 160rpx;
-  border-radius: 12rpx;
-  flex-shrink: 0;
-}
 .item-info {
-  flex: 1;
   display: flex;
   flex-direction: column;
+  gap: 12rpx;
+}
+.item-header {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
 }
 .item-title {
   font-size: 32rpx;
   font-weight: bold;
   color: #333;
+}
+.status-tag {
+  font-size: 24rpx;
+  padding: 6rpx 16rpx;
+  border-radius: 8rpx;
+}
+.status-0 {
+  background: #fff3e0;
+  color: #ff9800;
+}
+.status-1 {
+  background: #e8f5e9;
+  color: #4caf50;
+}
+.status-2 {
+  background: #ffebee;
+  color: #f56c6c;
 }
 .item-address {
   font-size: 28rpx;
@@ -190,21 +258,11 @@ export default {
   display: flex;
   justify-content: flex-end;
 }
-.btn {
-  padding: 12rpx 70rpx;
-  margin: 0 20rpx;
-  border-radius: 8rpx;
-  font-size: 28rpx;
-}
 .delete-btn {
   background: #ffebee;
   color: #f56c6c;
-}
-.loading-tip,
-.no-more-tip {
-  text-align: center;
-  font-size: 26rpx;
-  color: #999;
-  padding: 30rpx;
+  padding: 12rpx 30rpx;
+  border-radius: 8rpx;
+  font-size: 28rpx;
 }
 </style>

@@ -10,6 +10,7 @@ const collectRouter = require('./collect');
 const commentRouter = require('./comment');
 const adminRouter = require('./admin');
 const chatRouter = require('./chat');
+const auditRouter = require('./audit');
 
 // 健康检查接口
 router.get('/health', (req, res) => {
@@ -27,5 +28,6 @@ router.use('/collect', collectRouter);
 router.use('/comment', commentRouter);
 router.use('/admin', adminRouter);
 router.use('/chat', chatRouter);
+router.use('/audit', auditRouter);
 
 module.exports = router;

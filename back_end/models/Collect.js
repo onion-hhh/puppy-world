@@ -1,4 +1,3 @@
-// models/Collect.js
 const db = require('../utils/db');
 
 class Collect {
@@ -16,7 +15,6 @@ class Collect {
         'INSERT INTO collect (user_id, place_id) VALUES (?, ?)',
         [userId, placeId]
       );
-      // 更新地点收藏数
       await db.query(
         'UPDATE place SET collect_count = collect_count + 1 WHERE id = ?',
         [placeId]
@@ -34,7 +32,6 @@ class Collect {
         'DELETE FROM collect WHERE user_id = ? AND place_id = ?',
         [userId, placeId]
       );
-      // 更新地点收藏数
       await db.query(
         'UPDATE place SET collect_count = collect_count - 1 WHERE id = ? AND collect_count > 0',
         [placeId]
@@ -46,11 +43,10 @@ class Collect {
   }
 
   // 获取用户收藏列表
-  static async getByUserId(userId, { page, limit }) {
-    const offset = (page - 1) * limit;
+  static async getByUserId(userId) {
     const [rows] = await db.query(
-      'SELECT * FROM collect WHERE user_id = ? ORDER BY create_time DESC LIMIT ? OFFSET ?',
-      [userId, limit, offset]
+      'SELECT * FROM collect WHERE user_id = ? ORDER BY create_time DESC',
+      [userId]
     );
     return rows.map(row => new Collect(row));
   }

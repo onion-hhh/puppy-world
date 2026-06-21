@@ -5,8 +5,6 @@ const ApplyController = require('../controllers/applyController');
 const auth = require('../middleware/auth');
 const adminAuth = require('../middleware/adminAuth');
 
-// 新增：图片上传接口（不需要登录也可以，或加auth看你需求）
-router.post('/upload', ApplyController.uploadImage);
 // POST /api/apply/submit - 提交地点（需要认证）
 router.post('/submit', auth, ApplyController.submitApply);
 
@@ -18,5 +16,8 @@ router.get('/admin/list', auth, adminAuth, ApplyController.getAdminApplies);
 
 // POST /api/apply/admin/audit - 审核地点（需要管理员权限）
 router.post('/admin/audit', auth, adminAuth, ApplyController.auditApply);
+
+// DELETE /api/apply/delete - 删除申请（需要认证）
+router.post('/del', auth, ApplyController.deleteApply);
 
 module.exports = router;

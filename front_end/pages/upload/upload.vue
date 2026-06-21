@@ -45,29 +45,22 @@
         <input class="input" placeholder="请输入联系电话" v-model="form.phone" />
       </view>
 
-      <!-- 营业时间（可空） -->
+      <!-- 营业时间 -->
       <view class="form-item">
-        <text class="label">营业时间（选填）</text>
+        <text class="label">营业时间</text>
         <input class="input" placeholder="例如：9:00-22:00" v-model="form.businessHours" />
       </view>
 
-      <!-- 入内规则（可空） -->
+      <!-- 入内规则 -->
       <view class="form-item">
-        <text class="label">宠物友好规则（选填）</text>
+        <text class="label">宠物友好规则</text>
         <textarea class="textarea" placeholder="例如：牵绳即可" v-model="form.rules" maxlength="200" />
       </view>
 
-      <!-- 标签（可空） -->
+      <!-- 标签 -->
       <view class="form-item">
-        <text class="label">标签（选填，逗号分隔）</text>
+        <text class="label">标签（逗号分隔）</text>
         <input class="input" placeholder="例如：宠物友好,免费" v-model="form.tags" />
-      </view>
-
-      <!-- 上传照片（可空） -->
-      <view class="form-item upload-item">
-        <image class="preview-img" :src="form.image || defaultImg" mode="aspectFill" />
-        <view class="upload-text">上传宠物友好证明照片（选填）</view>
-        <button class="upload-btn" @tap="chooseImage">上传图片</button>
       </view>
 
       <button class="submit-btn" @tap="submitForm">提交</button>
@@ -77,26 +70,23 @@
 
 <script>
 import { post } from '@/utils/request.js'
-const defaultImg = '/static/logo.png'
 
 export default {
   data() {
     return {
-      defaultImg,
-	  typeOptions: ['公园', '店铺', '医院'],
+	  typeOptions: ['公园', '超市', '餐厅', '医院'],
       form: {
         name: '',
         type: '',
-		typeIndex: -1, // 下拉索引
-		typeText: '',   // 显示文本
+		typeIndex: -1,
+		typeText: '',
         address: '',
         phone: '',
         businessHours: '',
         rules: '',
         tags: '',
         latitude: null,
-        longitude: null,
-        image: ''
+        longitude: null
       }
     }
   },
@@ -113,25 +103,11 @@ export default {
       }
     },
 	onTypeChange(e) {
-	      const index = e.detail.value
-	      this.form.typeIndex = index
-	      this.form.typeText = this.typeOptions[index]
-	      // 提交时传给后端的数字值：1/2/3
-	      this.form.type = index + 1
-	    },
-    async chooseImage() {
-      try {
-        const res = await uni.chooseImage({
-          count: 1,
-          sizeType: ['compressed'],
-          sourceType: ['album', 'camera']
-        })
-        this.form.image = res.tempFilePaths[0]
-      } catch (err) {
-        uni.showToast({ title: '选择图片失败', icon: 'none' })
-      }
+      const index = parseInt(e.detail.value, 10)
+      this.form.typeIndex = index
+      this.form.typeText = this.typeOptions[index]
+      this.form.type = index + 1
     },
-	// 重置表单
 	resetForm() {
 	  this.form = {
 	    name: '',
@@ -144,19 +120,33 @@ export default {
 	    rules: '',
 	    tags: '',
 	    latitude: null,
-	    longitude: null,
-	    image: ''
+	    longitude: null
 	  }
 	},
 
     async submitForm() {
-      // ====== 必填字段校验 ======
       if (!this.form.name.trim()) {
         uni.showToast({ title: '请输入地点名称', icon: 'none' })
         return
       }
+      if (!this.form.type) {
+        uni.showToast({ title: '请选择地点类型', icon: 'none' })
+        return
+      }
       if (!this.form.address.trim()) {
         uni.showToast({ title: '请选择详细地址', icon: 'none' })
+        return
+      }
+      if (!this.form.businessHours.trim()) {
+        uni.showToast({ title: '请输入营业时间', icon: 'none' })
+        return
+      }
+      if (!this.form.rules.trim()) {
+        uni.showToast({ title: '请输入宠物友好规则', icon: 'none' })
+        return
+      }
+      if (!this.form.tags.trim()) {
+        uni.showToast({ title: '请输入标签', icon: 'none' })
         return
       }
 	  if (this.form.phone) {
@@ -170,33 +160,16 @@ export default {
       uni.showLoading({ title: '提交中...' })
 
       try {
-        let imageUrl = ''
-        if (this.form.image && this.form.image !== defaultImg) {
-          const uploadRes = await uni.uploadFile({
-            url: 'http://192.168.31.30:3000/api/apply/upload',
-            filePath: this.form.image,
-            name: 'file'
-          })
-          const resData = JSON.parse(uploadRes.data)
-          if (resData.code === 200 && resData.data?.url) {
-            imageUrl = resData.data.url
-          } else {
-            throw new Error('图片上传失败')
-          }
-        }
-		
-        // ====== 提交时：可空字段统一加 || null ======
         await post('/apply/submit', {
           name: this.form.name,
-          type: this.form.type ,
+          type: this.form.type,
           address: this.form.address,
           phone: this.form.phone || null,
           businessHours: this.form.businessHours || null,
           rules: this.form.rules || null,
           tags: this.form.tags || null,
           latitude: this.form.latitude || null,
-          longitude: this.form.longitude || null,
-          images: imageUrl || null
+          longitude: this.form.longitude || null
         })
 
         uni.hideLoading()
@@ -232,10 +205,6 @@ export default {
   padding: 0 30rpx;
   color: #fff;
 }
-.back-btn {
-  font-size: 36rpx;
-  margin-right: 20rpx;
-}
 .title {
   font-size: 34rpx;
   font-weight: bold;
@@ -268,29 +237,6 @@ export default {
 .input[disabled] {
   background: #f5f7fa;
   color: #666;
-}
-.upload-item {
-  display: flex;
-  align-items: center;
-}
-.preview-img {
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: 8rpx;
-  margin-right: 20rpx;
-}
-.upload-text {
-  flex: 1;
-  font-size: 28rpx;
-  color: #666;
-}
-.upload-btn {
-  background: #ffd166;
-  color: #333;
-  border-radius: 20rpx;
-  font-size: 26rpx;
-  padding: 10rpx 20rpx;
-  border: none;
 }
 .textarea {
   width: 90%;

@@ -16,8 +16,11 @@ class ChatController {
       if (!query) {
         return res.status(400).json({ code: 400, message: '缺少查询参数' });
       }
+      
+      // 如果没有配置 Coze，使用模拟流式响应
       if (!config.coze.botId || !config.coze.apiToken) {
-        return res.status(500).json({ code: 500, message: '智能助手配置未完成' });
+        console.log('Coze 未配置，使用模拟流式响应');
+        return this.sendMockStreamResponse(res, query);
       }
 
       const requestBody = {

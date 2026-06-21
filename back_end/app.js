@@ -17,6 +17,8 @@ app.use(express.json());
 // 解析URL编码的请求体
 app.use(express.urlencoded({ extended: true }));
 
+
+
 // 静态文件服务（上传的图片）
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -24,13 +26,21 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 const indexRouter = require('./routes/index');
 app.use('/api', indexRouter);
 
+// 审核路由
+const auditRouter = require('./routes/audit');
+app.use('/api/audit', auditRouter);
+
+// 直接添加删除申请接口（测试）
+const ApplyController = require('./controllers/applyController');
+const auth = require('./middleware/auth');
+app.post('/api/apply/delete', auth, ApplyController.deleteApply);
+
 // 全局错误处理
 app.use(errorHandler);
 
 // 启动服务器
 app.listen(config.port, '0.0.0.0',() => {
   console.log(`服务器运行在 http://localhost:${config.port}`);
-  // 测试数据库连接
   const db = require('./utils/db');
   db.testConnection();
 });

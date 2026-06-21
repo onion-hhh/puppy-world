@@ -1,4 +1,3 @@
-// models/Comment.js
 const db = require('../utils/db');
 
 class Comment {
@@ -13,43 +12,63 @@ class Comment {
 
   // 创建评论
   static async create(commentData) {
-    const conn = await db.getConnection(); // 开启事务
+    const conn = await db.getConnection();
     try {
       await conn.beginTransaction();
       const [result] = await db.query(
         'INSERT INTO comment (user_id, place_id, content, score) VALUES (?, ?, ?, ?)',
         [commentData.userId, commentData.placeId, commentData.content, commentData.score]
       );
-      
-      // 更新地点评论数和平均评分
+
       await db.query(
         'UPDATE place SET comment_count = comment_count + 1 WHERE id = ?',
         [commentData.placeId]
       );
-      
-      // 更新平均评分
+
       await db.query(
         'UPDATE place p SET p.avg_score = (SELECT AVG(score) FROM comment WHERE place_id = p.id) WHERE p.id = ?',
         [commentData.placeId]
       );
-      await conn.commit(); // 提交事务
+      await conn.commit();
       return result.insertId;
     } catch (error) {
-      await conn.rollback(); // 出错回滚
+      await conn.rollback();
       throw error;
     } finally {
-    conn.release(); // 释放连接
+      conn.release();
     }
   }
 
   // 获取地点评论列表
-  static async getByPlaceId(placeId, { page, limit }) {
-    const offset = (page - 1) * limit;
+  static async getByPlaceId(placeId) {
     const [rows] = await db.query(
-      'SELECT c.*, u.nickname, u.avatar FROM comment c LEFT JOIN user u ON c.user_id = u.id WHERE c.place_id = ? ORDER BY c.create_time DESC LIMIT ? OFFSET ?',
-      [placeId, limit, offset]
+      'SELECT c.*, u.nickname, u.avatar FROM comment c LEFT JOIN user u ON c.user_id = u.id WHERE c.place_id = ? ORDER BY c.create_time DESC',
+      [placeId]
     );
     return rows.map(row => new Comment(row));
+  }
+
+  // 获取管理员评论列表
+  static async getAdminList() {
+    const [rows] = await db.query(
+      `SELECT c.*, p.name as place_name
+       FROM comment c
+       LEFT JOIN place p ON c.place_id = p.id
+       ORDER BY c.create_time DESC`
+    );
+    return rows;
+  }
+
+  // 获取评论总数
+  static async getCount() {
+    const [rows] = await db.query('SELECT COUNT(*) as count FROM comment');
+    return rows[0].count;
+  }
+
+  // 删除评论
+  static async delete(commentId) {
+    const [result] = await db.query('DELETE FROM comment WHERE id = ?', [commentId]);
+    return result.affectedRows > 0;
   }
 }
 
